@@ -11,6 +11,7 @@
 
 #include "open3d/geometry/PointCloud.h"
 #include "open3d/utility/Eigen.h"
+#include "PcdRegistration.hpp"
 
 namespace open3d {
 namespace pipelines {
@@ -85,6 +86,27 @@ Eigen::Matrix4d TransformationEstimationPointToPlane::ComputeTransformation(
     Eigen::Matrix4d extrinsic;
     std::tie(is_success, extrinsic) =
             utility::SolveJacobianSystemAndObtainExtrinsicMatrix(JTJ, JTr);
+
+    return is_success ? extrinsic : Eigen::Matrix4d::Identity();
+}
+
+// Custom function using nm card
+
+Eigen::Matrix4d TransformationEstimationPointToPlane::ComputeTransformation(
+        const geometry::PointCloud &source,
+        const geometry::PointCloud &target,
+        const CorrespondenceSet &corres) const {
+    if (corres.empty() || !target.HasNormals())
+        return Eigen::Matrix4d::Identity();
+
+    PointCloudRegistration pcdReg(source, target);
+    pcdReg.performICPRegistration();
+    auto result = pcdReg.getResult();
+
+    bool is_success;
+    Eigen::Matrix4d extrinsic;
+    std::tie(is_success, extrinsic) =
+            utility::SolveJacobianSystemAndObtainExtrinsicMatrix(result.matrix, result.vector);
 
     return is_success ? extrinsic : Eigen::Matrix4d::Identity();
 }
